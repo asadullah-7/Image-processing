@@ -1,81 +1,78 @@
+import numpy as np
 import skimage.io as skio
 import matplotlib.pyplot as plt
-import numpy as np
 
-# -----------------------------
-# Padding Function
-# -----------------------------
+# ---------------- PADDING FUNCTION ----------------
 def padImage(image, filter_shape, padding_type):
-    pad_r = filter_shape[0] // 2
-    pad_c = filter_shape[1] // 2
-    new_r = image.shape[0] + 2 * pad_r
-    new_c = image.shape[1] + 2 * pad_c
+    pad_rows = filter_shape[0] // 2
+    pad_cols = filter_shape[1] // 2
+
+    new_row_count = image.shape[0] + 2 * pad_rows
+    new_col_count = image.shape[1] + 2 * pad_cols
 
     if padding_type == '0':
-        padded_img = np.zeros((new_r, new_c), dtype=np.uint8)
+        Padded_img = np.zeros((new_row_count, new_col_count), dtype=np.uint8)
     elif padding_type == '255':
-        padded_img = 255 * np.ones((new_r, new_c), dtype=np.uint8)
+        Padded_img = 255 * np.ones((new_row_count, new_col_count), dtype=np.uint8)
     else:
         return image
 
-    padded_img[pad_r:pad_r + image.shape[0], pad_c:pad_c + image.shape[1]] = image
-    return padded_img
+    # Insert original image in center
+    Padded_img[pad_rows:pad_rows + image.shape[0],
+               pad_cols:pad_cols + image.shape[1]] = image
+
+    return Padded_img
 
 
-# -----------------------------
-# Get Window Function
-# -----------------------------
+# ---------------- WINDOW EXTRACTION FUNCTION ----------------
 def get_window(pad_img, filter_shape, row, col):
     half_r = filter_shape[0] // 2
     half_c = filter_shape[1] // 2
-    return pad_img[row - half_r:row + half_r + 1, col - half_c:col + half_c + 1]
+    window = pad_img[row - half_r: row + half_r + 1,
+                     col - half_c: col + half_c + 1]
+    return window
 
 
-# -----------------------------
-# Linear Filter (Correlation / Convolution)
-# -----------------------------
-def applyFilter(image, filter, padding_type='0', convolve=False):
-    pad_img = padImage(image, filter.shape, padding_type)
-    out_img = np.zeros_like(image, dtype=np.float32)
-
-    if convolve:
-        filter = np.flipud(np.fliplr(filter))
+# ---------------- FILTER APPLY FUNCTION (LINEAR) ----------------
+def applyFilter(image, filter, padding_type, convolve=False):
+    padded_img = padImage(image, filter.shape, padding_type)
+    out_img = np.zeros_like(image)
 
     for r in range(image.shape[0]):
         for c in range(image.shape[1]):
-            window = get_window(pad_img, filter.shape, r + filter.shape[0] // 2, c + filter.shape[1] // 2)
-            out_img[r, c] = np.sum(window * filter)
+            window = get_window(padded_img, filter.shape, r + filter.shape[0]//2, c + filter.shape[1]//2)
 
-    out_img = np.clip(out_img, 0, 255)
-    return out_img.astype(np.uint8)
+            if convolve:
+                filter_used = np.flipud(np.fliplr(filter))
+            else:
+                filter_used = filter
+
+            out_img[r, c] = np.clip(np.sum(window * filter_used), 0, 255)
+
+    return out_img
 
 
-# -----------------------------
-# Statistical Filters
-# -----------------------------
-def applyStatisticalFilter(image, filter_size, padding_type='0', method='Average'):
-    pad_img = padImage(image, filter_size, padding_type)
-    out_img = np.zeros_like(image, dtype=np.uint8)
+# ---------------- STATISTICAL FILTER FUNCTION ----------------
+def applyStatisticalFilter(image, filter_size, padding_type, method):
+    padded_img = padImage(image, filter_size, padding_type)
+    out_img = np.zeros_like(image)
 
     for r in range(image.shape[0]):
         for c in range(image.shape[1]):
-            window = get_window(pad_img, filter_size, r + filter_size[0] // 2, c + filter_size[1] // 2)
-
-            if method == 'Min':
+            window = get_window(padded_img, filter_size, r + filter_size[0]//2, c + filter_size[1]//2)
+            if method == 'min':
                 out_img[r, c] = np.min(window)
-            elif method == 'Max':
+            elif method == 'max':
                 out_img[r, c] = np.max(window)
-            elif method == 'Median':
+            elif method == 'median':
                 out_img[r, c] = np.median(window)
-            elif method == 'Average':
+            elif method == 'average':
                 out_img[r, c] = np.mean(window)
 
     return out_img
 
 
-# -----------------------------
-# Show Images Side by Side
-# -----------------------------
+# ---------------- SHOW COMPARISON FUNCTION ----------------
 def show_comparison(original, filtered, title):
     plt.figure(figsize=(10, 5))
     plt.subplot(1, 2, 1)
@@ -91,63 +88,59 @@ def show_comparison(original, filtered, title):
     plt.show()
 
 
-# -----------------------------
-# Main Menu
-# -----------------------------
-if __name__ == "__main__":
-    # Read image
-    path = input("Enter image path (e.g., image.jpg): ")
-    image = skio.imread(path, as_gray=True)
-    image = (image * 255).astype(np.uint8)
+# ---------------- MAIN PROGRAM (MENU) ----------------
+image = skio.imread('livingroom.tif', as_gray=True)
+image = (image * 255).astype(np.uint8)
 
-    # Step 1: Choose Padding
-    print("\nChoose Padding Type:")
-    print("1. 0-Padding")
-    print("2. 255-Padding")
-    pad_choice = input("Enter 0 or 255: ")
-
-    # Step 2: Choose Filter
-    print("\nChoose Filter:")
-    print("1. Mean Filter")
-    print("2. Gaussian Filter")
-    print("3. Edge Detection (Convolution)")
-    print("4. Median Filter")
-    print("5. Min Filter")
-    print("6. Max Filter")
-    print("7. Average (Statistical) Filter")
+while True:
+    print("\n=== Image Processing Menu ===")
+    print("1. Apply Mean Filter")
+    print("2. Apply Gaussian Filter")
+    print("3. Apply Median Filter")
+    print("4. Apply Min Filter")
+    print("5. Apply Max Filter")
+    print("6. Apply Convolution Filter (Edge Detection)")
+    print("0. Exit")
 
     choice = input("Enter your choice: ")
 
-    # Filters
-    mean_filter = np.ones((3, 3)) / 9
-    gaussian_filter = np.array([[1, 2, 1],
-                                [2, 4, 2],
-                                [1, 2, 1]]) / 16
-    edge_filter = np.array([[-1, -1, -1],
-                            [-1, 8, -1],
-                            [-1, -1, -1]])
+    if choice == '0':
+        break
 
-    # Step 3: Apply Selected Filter
+    pad_choice = input("Enter padding type (0 or 255 or none): ").lower()
+
     if choice == '1':
-        result = applyFilter(image, mean_filter, pad_choice)
-        show_comparison(image, result, "Mean Filter")
+        mean_filter = (1/9) * np.ones((3,3))
+        filtered = applyFilter(image, mean_filter, pad_choice)
+        show_comparison(image, filtered, "Mean Filter")
+
     elif choice == '2':
-        result = applyFilter(image, gaussian_filter, pad_choice)
-        show_comparison(image, result, "Gaussian Filter")
+        gaussian_filter = (1/16) * np.array([[1,2,1],
+                                             [2,4,2],
+                                             [1,2,1]])
+        filtered = applyFilter(image, gaussian_filter, pad_choice)
+        show_comparison(image, filtered, "Gaussian Filter")
+
     elif choice == '3':
-        result = applyFilter(image, edge_filter, pad_choice, convolve=True)
-        show_comparison(image, result, "Edge Detection (Convolve)")
+        filtered = applyStatisticalFilter(image, (3,3), pad_choice, 'median')
+        show_comparison(image, filtered, "Median Filter")
+
     elif choice == '4':
-        result = applyStatisticalFilter(image, (3, 3), pad_choice, 'Median')
-        show_comparison(image, result, "Median Filter")
+        filtered = applyStatisticalFilter(image, (3,3), pad_choice, 'min')
+        show_comparison(image, filtered, "Min Filter")
+
     elif choice == '5':
-        result = applyStatisticalFilter(image, (3, 3), pad_choice, 'Min')
-        show_comparison(image, result, "Min Filter")
+        filtered = applyStatisticalFilter(image, (3,3), pad_choice, 'max')
+        show_comparison(image, filtered, "Max Filter")
+
     elif choice == '6':
-        result = applyStatisticalFilter(image, (3, 3), pad_choice, 'Max')
-        show_comparison(image, result, "Max Filter")
-    elif choice == '7':
-        result = applyStatisticalFilter(image, (3, 3), pad_choice, 'Average')
-        show_comparison(image, result, "Average (Statistical) Filter")
+        edge_filter = np.array([[-1, -1, -1],
+                                [-1, 8, -1],
+                                [-1, -1, -1]])
+        filtered = applyFilter(image, edge_filter, pad_choice, convolve=True)
+        show_comparison(image, filtered, "Edge Detection")
+
     else:
-        print("Invalid choice!")
+        print("Invalid choice. Try again!")
+
+print("Program ended.")
